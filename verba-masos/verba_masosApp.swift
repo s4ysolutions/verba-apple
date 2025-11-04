@@ -1,14 +1,17 @@
 import SwiftUI
+import core
 
 @main
 struct verba_masosApp: App {
-   // private let translationService = TranslationService(repository: TranslationRestRepository())
 
-    // Attach AppDelegate to integrate AppKit status item and activation behavior.
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
         appScene
+    }
+
+    init() {
+        appDelegate.translationService = translationService
     }
 
     // MARK: - Scene Builders
@@ -16,7 +19,7 @@ struct verba_masosApp: App {
     @available(macOS 13.0, *)
     private var modernScene: some Scene {
         WindowGroup("MainWindow") {
-            ContentView()
+            ContentView(translateUseCase: translationService)
         }
         .defaultSize(width: 800, height: 600)
         .windowResizability(.contentSize)
@@ -28,7 +31,7 @@ struct verba_masosApp: App {
     @available(macOS, introduced: 11.0, obsoleted: 13.0)
     private var legacyScene: some Scene {
         WindowGroup("MainWindow") {
-            ContentView()
+            ContentView(translateUseCase: translationService)
         }
         .commands {
         }
@@ -41,4 +44,6 @@ struct verba_masosApp: App {
             return legacyScene
         }
     }
+
+    private let translationService = TranslationService(repository: TranslationRestRepository())
 }

@@ -6,8 +6,11 @@
 import Cocoa
 import SwiftUI
 import os
+import core
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+    var translationService: TranslationService<TranslationRestRepository>?
+
     private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "verba-masos", category: "AppDelegate")
 
     private var statusBarController: StatusBarController?
@@ -54,7 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             }
 
             Self.logger.debug("Creating new window")
-            let hosting = NSHostingController(rootView: ContentView())
+            let hosting = NSHostingController(rootView: ContentView(translateUseCase: self.translationService!))
             let window = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable],

@@ -6,17 +6,17 @@
 //
 
 import core
+import OSLog
 import SwiftUI
 
 struct ContentView: View {
-    @Environment(\.translationService) private var translationService: TranslationService<TranslationRestRepository>
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "verba-masos", category: "ContentView")
 
-    @State private var clipboardText: String = ""
-    @State private var middleText: String = """
-    Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed non risus. Suspendisse lectus tortor, dignissim sit amet, adipiscing nec, ultricies sed, dolor. \
-    Cras elementum ultrices diam. Maecenas ligula massa, varius a, semper congue, euismod non, mi. Proin porttitor, orci nec nonummy molestie, enim est eleifend mi, \
-    non fermentum diam nisl sit amet erat. Duis semper. Duis arcu massa, scelerisque vitae, consequat in, pretium a, enim. Pellentesque congue.
-    """
+    @StateObject private var viewModel: TranslationViewModel
+
+    init(translateUseCase: TranslateUseCase) {
+        _viewModel = StateObject(wrappedValue: TranslationViewModel(translator: translateUseCase))
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -24,12 +24,13 @@ struct ContentView: View {
             let topHeight = totalHeight * (1.0 / 6.0)
             let middleHeight = totalHeight * (1.0 / 2.0)
             let bottomHeight = totalHeight * (1.0 / 3.0)
+            let vm = viewModel
 
             VStack(spacing: 0) {
                 // Top panel
                 panelBackground(
                     ScrollView {
-                        selectableText(clipboardText)
+                        selectableText(vm.translatingText)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding()
                     }
@@ -39,14 +40,21 @@ struct ContentView: View {
                 Divider()
 
                 // Middle panel
-                panelBackground(
-                    ScrollView {
-                        selectableText(middleText)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding()
-                    }
-                )
-                .frame(height: middleHeight)
+                if vm.isLoading {
+                    panelBackground(
+                        ProgressView("Translating...")
+                    )
+                    .frame(height: middleHeight)
+                } else {
+                    panelBackground(
+                        ScrollView {
+                            selectableText(vm.translatedText)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding()
+                        }
+                    )
+                    .frame(height: middleHeight)
+                }
 
                 Divider()
 
@@ -71,7 +79,7 @@ struct ContentView: View {
             .onAppear {
                 updateClipboardText()
             }
-            // Update when the app becomes active (regains focus)
+            // Update when the app becomes active (regains focusInsert)
             .onReceive(appBecameActivePublisher) { _ in
                 updateClipboardText()
             }
@@ -92,23 +100,15 @@ struct ContentView: View {
 
     private func updateClipboardText() {
         #if os(macOS)
-            if let str = NSPasteboard.general.string(forType: .string) {
-                clipboardText = str
-            } else {
-                clipboardText = ""
-            }
+            let str = NSPasteboard.general.string(forType: .string) ?? ""
         #else
-            clipboardText = UIPasteboard.general.string ?? ""
+            let str = UIPasteboard.general.string ?? ""
         #endif
-        try {
-            translationService.translate(from: TranslationRequest.create(
-                sourceText: clipboardText,
-                sourceLang: "english",
-                targetLang: "русский",
-            ).get())
+        Task {
+            logger.debug("translate task launched")
+            await viewModel.translate(text: str, force: false)
         }
     }
-    // MARK: - Translate
 
     // MARK: - UI helpers
 
@@ -140,9 +140,14 @@ struct ContentView: View {
 
     private func handleOK() {
         print("OK tapped")
-        #if os(macOS)
-            NSApp.keyWindow?.performClose(nil)
-        #endif
+        Task{
+            await viewModel.translate(text: viewModel.translatingText, force: true)
+        }
+        /*
+         #if os(macOS)
+             NSApp.keyWindow?.performClose(nil)
+         #endif
+          */
     }
 
     private func handleCancel() {
@@ -154,5 +159,5 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView()
+    ContentView(translateUseCase: TranslationService(repository: TranslationRestRepository()))
 }

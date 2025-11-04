@@ -37,7 +37,7 @@ public enum ApiError: Error, LocalizedError {
     public var errorDescription: String? {
         switch self {
             case .invalidKey:
-                return "Invalid API key"
+                return "Invalid Application key"
             case .rateLimitExceeded:
                 return "Rate limit exceeded"
             case .encodingFailed(let data, let error):
