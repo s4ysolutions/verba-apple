@@ -13,40 +13,44 @@ struct ContentView: View {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "verba-masos", category: "ContentView")
 
     @StateObject private var viewModel: TranslationViewModel
+    @FocusState private var focused: Bool
 
-    init(translateUseCase: TranslateUseCase) {
-        _viewModel = StateObject(wrappedValue: TranslationViewModel(translator: translateUseCase))
+    init(translateUseCase: TranslateUseCase, getProvidersUseCase: GetProvidersUseCase) {
+        _viewModel = StateObject(wrappedValue: TranslationViewModel(
+            translateUseCase: translateUseCase,
+            getProviderUseCase: getProvidersUseCase
+        ))
     }
 
     var body: some View {
         let vm = viewModel
 
-        // GeometryReader { geo in
-        // let totalHeight = geo.size.height
-        // let topHeight = totalHeight * (1.0 / 6.0)
-        // let middleHeight = totalHeight * (1.0 / 2.0)
-        // let bottomHeight = totalHeight * (1.0 / 3.0)
-
         VStack(spacing: 0) {
             GeometryReader { geo in
-
-                VStack(spacing: 0) {
-                    // Top panel
+                if viewModel.isLoading {
                     panelBackground(
-                        HStack(alignment: .top, spacing: 0) {
-                            ScrollView {
+                        VStack {
+                            Spacer()
+                            ProgressView("Loading...")
+                                .frame(maxWidth: .infinity, alignment: .center)
+                            Spacer()
+                        }
+                    )
+                    .frame(height: geo.size.height)
+                } else {
+                    // Top panel
+                    VStack(spacing: 0) {
+                        panelBackground(
+                            VStack(spacing: 0) {
                                 editableText($viewModel.translatingText)
+                                    .focused($focused)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding([.top, .bottom])
-                            }
-                            .padding()
-                            VStack(alignment: .trailing, spacing: 0) {
-                                TextField(NSLocalizedString("lable.from", value: "From:", comment: "A language to translate from"),
-                                          text: $viewModel.fromLanguage)
-                                    // .frame(maxWidth: 150)
-                                    .padding()
-                                HStack {
+                                    .padding([.leading, .bottom])
+                                HStack(spacing: 0) {
                                     Spacer()
+                                    TextField(NSLocalizedString("lable.from", value: "From:", comment: "A language to translate from"),
+                                              text: $viewModel.fromLanguage)
+                                        .frame(maxWidth: 150)
                                     Button(NSLocalizedString(
                                         "label.translate",
                                         value: "Translate",
@@ -56,97 +60,99 @@ struct ContentView: View {
                                     }
                                     .padding([.trailing, .leading])
                                     .buttonStyle(.borderedProminent)
-                                    //.controlSize(.large)
-                                   // keyboardShortcut(.return, modifiers: .command)
-                                    //.keyboardShortcut(.defaultAction)
-                                    .disabled(viewModel.isLoading)
-                                }
+                                    .disabled(viewModel.isTranslating)
+                                }.padding([.bottom])
                             }
-                            .fixedSize(horizontal: true, vertical: false)
-                        }
-                    )
-                    .frame(height: geo.size.height * (2.0 / 9.0)) // 2 -
-                    // .frame(maxHeight: .infinity)
-                    // .frame(height: topHeight)
-
-                    Divider()
-
-                    // Middle panel
-                    if vm.isLoading {
-                        panelBackground(
-                            ProgressView("Translating...")
                         )
-                        .frame(height: geo.size.height * (7.0 / 9.0))
-                        // .frame(minHeight: 0)
-                        // .layoutPriority(2)
-                        // --
-                        // .frame(height: middleHeight)
-                    } else {
-                        panelBackground(
-                            HStack(alignment: .top, spacing: 0) {
-                                ScrollView {
+                        .frame(height: geo.size.height * (2.0 / 9.0)) // 2 -
+
+                        Divider()
+
+                        // Middle panel
+                        if vm.isTranslating {
+                            panelBackground(
+                                ProgressView("Translating...")
+                            )
+                            .frame(height: geo.size.height * (7.0 / 9.0))
+                        } else {
+                            panelBackground(
+                                VStack(spacing: 0) {
                                     editableText($viewModel.translatedText)
                                         .frame(maxWidth: .infinity, alignment: .leading)
-                                        .padding()
-                                }
-                                .padding([.top, .bottom])
-                                VStack(alignment: .trailing, spacing: 0) {
-                                    TextField(NSLocalizedString("label.to", value: "To:", comment: "A language to translate to"),
-                                              text: $viewModel.toLanguage)
-                                        // .frame(maxWidth: 150)
-                                        .padding()
-                                    HStack {
+                                        .padding([.leading, .top, .bottom])
+                                    HStack(spacing: 0) {
+                                        HStack(spacing: 0) {
+                                            Picker("", selection: $viewModel.mode) {
+                                                Text(modeLabel(.Auto)).tag(TranslationMode.Auto)
+                                                Text(modeLabel(.TranslateSentence)).tag(TranslationMode.TranslateSentence)
+                                                Text(modeLabel(.ExplainWords)).tag(TranslationMode.ExplainWords)
+                                            }
+                                            .pickerStyle(.menu)
+                                            .pickerStyle(.menu)
+                                            .padding(.trailing)
+                                            #if os(macOS)
+                                                .frame(maxWidth: 180)
+                                            #endif
+
+                                            // Quality selector
+                                            Picker("", selection: $viewModel.quality) {
+                                                Text(qualityLabel(.Fast)).tag(TranslationQuality.Fast)
+                                                Text(qualityLabel(.Optimal)).tag(TranslationQuality.Optimal)
+                                                Text(qualityLabel(.Thinking)).tag(TranslationQuality.Thinking)
+                                            }
+                                            .pickerStyle(.menu)
+                                            .padding(.trailing)
+                                            #if os(macOS)
+                                                .frame(maxWidth: 180)
+                                            #endif
+
+                                            Picker("", selection: $viewModel.provider) {
+                                                ForEach(viewModel.providers) { provider in
+                                                    Text(provider.displayName).tag(Optional(provider))
+                                                }
+                                            }
+                                            .pickerStyle(.menu)
+                                            #if os(macOS)
+                                                .frame(maxWidth: 180)
+                                            #endif
+                                        }
+                                        .fixedSize(horizontal: true, vertical: false)
+
                                         Spacer()
-                                        Button(NSLocalizedString(
-                                            "label.copy",
-                                            value: "Copy",
-                                            comment: "Copy the translated text to the clipboard")) {
-                                                handleCopy()
-                                            }.padding([.trailing, .leading])
-                                    }
+
+                                        HStack(spacing: 0) {
+                                            TextField(NSLocalizedString("label.to", value: "To:", comment: "A language to translate to"),
+                                                      text: $viewModel.toLanguage)
+                                                .frame(maxWidth: 150)
+                                                .padding([.trailing])
+                                            Button(NSLocalizedString(
+                                                "label.copy",
+                                                value: "Copy",
+                                                comment: "Copy the translated text to the clipboard"), systemImage: "doc.on.doc") {
+                                                    handleCopy()
+                                                }
+                                        }
+                                        .fixedSize(horizontal: true, vertical: false)
+                                    }.padding([.bottom, .trailing, .leading])
                                 }
-                                .fixedSize(horizontal: true, vertical: false)
-                            }
-                        )
-                        .frame(height: geo.size.height * (7.0 / 9.0))
-                        // .frame(minHeight: 0)
-                        // .layoutPriority(2)
-                        // --
-                        // .frame(height: middleHeight)
+                            )
+                            .frame(height: geo.size.height * (7.0 / 9.0))
+                        }
                     }
                 }
             }
-/*
-            Divider()
-
-            // Bottom panel
-            panelBackground(
-                HStack {
-                    Spacer()
-                    Button("Cancel") {
-                        handleCancel()
-                    }
-                    .keyboardShortcut(.cancelAction)
-                    /*
-                                        Button("OK") {
-                                            handleOK()
-                                        }
-                                        .keyboardShortcut(.defaultAction)
-                     */
-                }
-                .padding()
-            )
-            // .frame(height: bottomHeight)
- */
         }
         .onAppear {
+            logger.debug("View: onAppear")
             updateClipboardText()
+            focused = true
         }
         // Update when the app becomes active (regains focusInsert)
         .onReceive(appBecameActivePublisher) { _ in
+            logger.debug("View: onRecieve")
             updateClipboardText()
+            focused = true
         }
-        // }
         .padding(.vertical, 0)
         .padding(.horizontal, 0)
     }
@@ -162,19 +168,23 @@ struct ContentView: View {
     }
 
     private func updateClipboardText() {
-        if (viewModel.firstTime) {
-            viewModel.firstTime = false
+        let monitorClipboard = UserDefaults.standard.object(forKey: "menu.check.autoCopy") as? Bool ?? true
+        if monitorClipboard == false {
+            logger.debug("Monitoring clipboard is disabled")
             return
         }
+
         #if os(macOS)
             let str = NSPasteboard.general.string(forType: .string) ?? ""
         #else
             let str = UIPasteboard.general.string ?? ""
         #endif
+        logger.error("Launching translation task (force: false)")
         Task {
-            logger.debug("translate task launched")
+            logger.error("Translation task (force: false) started")
             await viewModel.translate(text: str, force: false)
         }
+        logger.error("Launching translation task (force: false) ended")
     }
 
     // MARK: - UI helpers
@@ -216,6 +226,30 @@ struct ContentView: View {
         #endif
     }
 
+    // Provide user-facing labels for modes
+    private func modeLabel(_ mode: TranslationMode) -> String {
+        switch mode {
+        case .Auto:
+            return NSLocalizedString("mode.auto", value: "Auto", comment: "Automatic mode")
+        case .TranslateSentence:
+            return NSLocalizedString("mode.translate", value: "Translate sentence", comment: "Translate sentence mode")
+        case .ExplainWords:
+            return NSLocalizedString("mode.explain", value: "Explain words", comment: "Explain words mode")
+        }
+    }
+
+    // Provide user-facing labels for qualities
+    private func qualityLabel(_ quality: TranslationQuality) -> String {
+        switch quality {
+        case .Fast:
+            return NSLocalizedString("qulity.fast", value: "Fast", comment: "Lowest but fastest translate")
+        case .Optimal:
+            return NSLocalizedString("qulity.optimal", value: "Optimal", comment: "Optimal quality but acceptable fast translate")
+        case .Thinking:
+            return NSLocalizedString("qulity.thinking", value: "Thinking", comment: "Best quality but slowest translate")
+        }
+    }
+
     // MARK: - Actions
 
     private func handleOK() {
@@ -233,6 +267,7 @@ struct ContentView: View {
     }
 
     private func handleTranslate() {
+        logger.debug("Launching translation (force: true)")
         Task {
             await viewModel.translate(text: viewModel.translatingText, force: true)
         }
@@ -244,5 +279,5 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView(translateUseCase: TranslationService(repository: TranslationRestRepository()))
+    // ContentView(translateUseCase: TranslationService(translationRepository: TranslationRestRepository()))
 }

@@ -1,51 +1,83 @@
+import CryptoKit
 import Foundation
 import OSLog
-import CryptoKit
 
 public struct TranslationRestRepository: TranslationRepository {
-    private static let url = URL(string: "https://verba.s4y.solutions/translation")!
+    private static let baseURL = "https://verba.s4y.solutions"
     // static let url = URL(string: "http://localhost:4000/translation")!
+    private static let translationUrl = URL(string: "\(baseURL)/translation")!
+    private static let providersUrl = URL(string: "\(baseURL)/providers")!
     private let secret: String
 
     public init() {
         secret = Bundle.main.object(forInfoDictionaryKey: "VERBA_SECRET") as! String
     }
 
+    public func providers() async -> Result<[TranslationProvider], ApiError> {
+        var request = URLRequest(url: Self.providersUrl)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let username = "verba"
+        let wsseHeader = makeWsseHeader(username: username, secret: secret)
+        request.setValue(wsseHeader, forHTTPHeaderField: "Authorization")
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                return .failure(.unexpected("Non-HTTP response"))
+            }
+            switch http.statusCode {
+            case 200 ... 299:
+                break
+            case 401, 403:
+                return .failure(.invalidKey)
+            case 429:
+                return .failure(.rateLimitExceeded)
+            default:
+                let bodyPreview = String(data: data, encoding: .utf8) ?? "<non-utf8 body>"
+                let msg = "HTTP \(http.statusCode): \(bodyPreview)"
+                logger.error("\(msg)")
+                return .failure(.unexpected(msg))
+            }
+            if let json = try? JSONSerialization.jsonObject(with: data, options: []) as? [String] {
+                let providers = json.map { TranslationProvider(id: $0, displayName: $0) }
+                return .success(providers)
+            }
+            let msg = "Get providers expected JSON array in response, got: \(data)"
+            logger.error("\(msg)")
+            return .failure(.decodingFailed("\(msg)", NSError(domain: "Empty response", code: -1)))
+        } catch {
+            let msg = "Failed to fetch providers: \(error)"
+            return .failure(.networking(error))
+        }
+    }
+
     public func translate(from translationRequest: TranslationRequest) async -> Result<String, TranslationError> {
         // Build request
-        var request = URLRequest(url: Self.url)
+        var request = URLRequest(url: Self.translationUrl)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        // If you also want a username configurable, either add VERBA_USERNAME similarly,
-        // or keep a fixed username if that’s your protocol.
         let username = "verba"
-
-        // Build WSSE Authorization header from runtime secret
         let wsseHeader = makeWsseHeader(username: username, secret: secret)
         request.setValue(wsseHeader, forHTTPHeaderField: "Authorization")
 
         // Map enums to server-expected strings
         let modeString: String = {
             switch translationRequest.mode {
-                case .TranslateSentence: return "translate"
-                case .ExplainWords: return "explain"
-                case .Auto: return "auto"
+            case .TranslateSentence: return "translate"
+            case .ExplainWords: return "explain"
+            case .Auto: return "auto"
             }
         }()
 
-        let providerString: String = {
-            switch translationRequest.provider {
-                case .OpenAI: return "openai"
-                case .Gemini: return "google"
-            }
-        }()
+        let providerString = translationRequest.provider.id
 
         let qualityString: String = {
             switch translationRequest.quality {
-                case .Fast: return "fast"
-                case .Optimal: return "optimal"
-                case .Thinking: return "deep"
+            case .Fast: return "fast"
+            case .Optimal: return "optimal"
+            case .Thinking: return "deep"
             }
         }()
 
@@ -56,7 +88,7 @@ public struct TranslationRestRepository: TranslationRepository {
             "to": translationRequest.targetLang,
             "mode": modeString,
             "provider": providerString,
-            "quality": qualityString
+            "quality": qualityString,
         ]
 
         do {
@@ -73,17 +105,16 @@ public struct TranslationRestRepository: TranslationRepository {
                 return .failure(.api(.unexpected("Non-HTTP response")))
             }
 
-            // Basic error mapping by status code
             switch http.statusCode {
-                case 200...299:
-                    break
-                case 401, 403:
-                    return .failure(.api(.invalidKey))
-                case 429:
-                    return .failure(.api(.rateLimitExceeded))
-                default:
-                    let bodyPreview = String(data: data, encoding: .utf8) ?? "<non-utf8 body>"
-                    return .failure(.api(.unexpected("HTTP \(http.statusCode): \(bodyPreview)")))
+            case 200 ... 299:
+                break
+            case 401, 403:
+                return .failure(.api(.invalidKey))
+            case 429:
+                return .failure(.api(.rateLimitExceeded))
+            default:
+                let bodyPreview = String(data: data, encoding: .utf8) ?? "<non-utf8 body>"
+                return .failure(.api(.unexpected("HTTP \(http.statusCode): \(bodyPreview)")))
             }
 
             if let json = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any],
@@ -148,7 +179,7 @@ public struct TranslationRestRepository: TranslationRepository {
                 var remaining = count
                 var offset = 0
                 while remaining > 0 {
-                    let rnd = UInt64.random(in: UInt64.min...UInt64.max)
+                    let rnd = UInt64.random(in: UInt64.min ... UInt64.max)
                     var rndLE = rnd.littleEndian
                     let toCopy = min(remaining, MemoryLayout.size(ofValue: rndLE))
                     withUnsafeBytes(of: &rndLE) { src in

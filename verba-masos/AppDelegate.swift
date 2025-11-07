@@ -4,27 +4,58 @@
 //
 
 import Cocoa
-import SwiftUI
-import os
 import core
+import os
+import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var translationService: TranslationService<TranslationRestRepository>?
 
     private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "verba-masos", category: "AppDelegate")
+    private var detector: GlobalDoubleCmdCDetector?
+    private let selectionCapture = SelectionCapture()
 
     private var statusBarController: StatusBarController?
     private var mainWindow: NSWindow? // keep a strong reference
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.accessory)
         statusBarController = StatusBarController(
             onShow: { [weak self] in
+                Self.logger.debug("Show clicked self=<\(self)>")
+                // self?.showWindow()
                 self?.bringMainWindowToFront()
             },
             onQuit: {
                 NSApp.terminate(nil)
             }
         )
+
+        detector = GlobalDoubleCmdCDetector {
+            Self.logger.debug("Double Cmd+C detected!")
+            self.selectionCapture.captureSelection { [weak self] text in
+                guard let self = self, let text = text else {
+                    Self.logger.warning("No text captured")
+                    return
+                }
+                self.bringMainWindowToFront()
+            }
+        }
+
+        let started = detector?.start() ?? false
+        Self.logger.debug("Double Cmd+C detection \(started ? "started" : "not started")")
+    }
+
+    private func showWindow() {
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        // Reopen window if needed
+        if NSApp.windows.isEmpty {
+            // Trigger window creation through your SwiftUI scene
+            NotificationCenter.default.post(name: NSNotification.Name("ShowMainWindow"), object: nil)
+        } else {
+            NSApp.windows.first?.makeKeyAndOrderFront(nil)
+        }
     }
 
     // Bring the SwiftUI WindowGroup window to front and focus it.
@@ -34,8 +65,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             Self.logger.debug("Bringing window to front")
 
             // Activate app first
-            NSApp.unhide(nil)
-            NSApp.activate(ignoringOtherApps: true)
+            // NSApp.unhide(nil)
+            // NSApp.activate(ignoringOtherApps: true)
+            NSApp.setActivationPolicy(.regular)
+            // NSApp.activate(ignoringOtherApps: true)
+            self.activateApp()
 
             // Find or create window (no extra async needed here)
             if let window = self.mainWindow, self.isUsableContentWindow(window) {
@@ -57,7 +91,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             }
 
             Self.logger.debug("Creating new window")
-            let hosting = NSHostingController(rootView: ContentView(translateUseCase: self.translationService!))
+            let hosting = NSHostingController(rootView: ContentView(
+                translateUseCase: self.translationService!,
+                getProvidersUseCase: self.translationService!
+            ))
             let window = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -65,7 +102,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 defer: false
             )
             window.center()
-            window.title = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "App"
+            window.title = Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Verba"
             window.contentViewController = hosting
             window.isReleasedWhenClosed = false
             window.delegate = self
@@ -77,7 +114,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     // MARK: - NSWindowDelegate
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        NSApp.setActivationPolicy(.accessory)
+        return false
+    }
+
     func windowWillClose(_ notification: Notification) {
+        Self.logger.debug("windowWillClose")
         guard let window = notification.object as? NSWindow else { return }
         if window === mainWindow {
             mainWindow = nil
@@ -85,6 +129,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     // MARK: - Helpers
+
     private func present(_ window: NSWindow) {
         Self.logger.debug("present")
 
@@ -94,20 +139,63 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             window.deminiaturize(nil)
         }
 
-        // Activate with strong options
-        let options: NSApplication.ActivationOptions = [.activateIgnoringOtherApps]
-        NSRunningApplication.current.activate(options: options)
+        activateApp()
 
         // Make key and order front
-        window.makeKeyAndOrderFront(nil)
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            /*
+             Switches from whatever app is active to yours
+             The ignoringOtherApps: true means "steal focus even if user is typing in another app"
+             */
+            NSApp.activate(ignoringOtherApps: true)
+            /*
+             "Make this window the key window (receives keyboard input) AND bring it to front"
+
+             makeKey = this window gets keyboard events
+             orderFront = move window to front of all windows
+             */
+            window.makeKeyAndOrderFront(nil)
+            /*
+             More aggressive than orderFront
+             Ignores some window ordering restrictions
+             Added because makeKeyAndOrderFront sometimes fails for menu bar apps
+             */
+            window.orderFrontRegardless()
+            /*
+             firstResponder = the thing that gets keyboard events
+             Setting it to contentView should trigger SwiftUI to focus its first field
+             Often doesn't work because SwiftUI manages its own focus
+             */
+            window.makeFirstResponder(window.contentView)
+            /*
+             Redundant with makeKeyAndOrderFront above
+             Added out of desperation when that didn't work
+             window.makeKey()
+             */
+            /*
+             AppKit maintains a "key view loop" (tab order between fields)
+             This recalculates it in case it's stale
+             Might help AppKit find the first text field... might not
+             */
+            window.recalculateKeyViewLoop()
+        }
 
         Self.logger.debug("Window presented")
     }
 
+    private func activateApp() {
+        // Activate with strong options
+        let options: NSApplication.ActivationOptions = [.activateIgnoringOtherApps]
+        NSRunningApplication.current.activate(options: options)
+    }
+
     private func isUsableContentWindow(_ window: NSWindow) -> Bool {
+        Self.logger.debug("check isUsableContentWindow: \(window)...")
         if String(describing: type(of: window)).contains("NSStatusBarWindow") { return false }
         if !window.canBecomeKey { return false }
         if window.contentViewController == nil && !window.isVisible { return false }
+        Self.logger.debug("... true")
         return true
     }
 

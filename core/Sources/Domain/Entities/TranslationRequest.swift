@@ -26,9 +26,9 @@ public struct TranslationRequest: Sendable {
         sourceText: String,
         sourceLang: String,
         targetLang: String,
-        mode: String = "auto",
-        provider: String = "google",
-        quality: String = "medium",
+        mode: TranslationMode = .Auto,
+        provider: TranslationProvider,
+        quality: TranslationQuality = .Optimal
     ) -> Result<TranslationRequest, TranslationError> {
         // Validate sourceText
         let trimmedText = sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -49,30 +49,26 @@ public struct TranslationRequest: Sendable {
             return .failure(.validation(.langTooShort(targetLang)))
         }
 
-        let modeResult = TranslationMode.from(string: mode)
-        let providerResult = TranslationProvider.from(string: provider)
-        let qualityResult = TranslationQuality.from(string: quality)
+        // let modeResult = mode //TranslationMode.from(string: mode)
+        // let qualityResult = TranslationQuality.from(string: quality)
+        // let providerResult = TranslationProvider.from(string: provider)
 
         // Short-circuit on any failure
-        switch (modeResult, providerResult, qualityResult) {
-        case let (.success(mode), .success(provider), .success(quality)):
-            // All parsed: Create and succeed
-            let request = TranslationRequest(
-                sourceText: sourceText,
-                sourceLang: sourceLang,
-                targetLang: targetLang,
-                mode: mode,
-                provider: provider,
-                quality: quality
-            )
-            return .success(request)
+        // switch providerResult {
+        // case let .success(provider):
+        // All parsed: Create and succeed
+        let request = TranslationRequest(
+            sourceText: sourceText,
+            sourceLang: sourceLang,
+            targetLang: targetLang,
+            mode: mode,
+            provider: provider,
+            quality: quality
+        )
+        return .success(request)
 
-        case let (.failure(modeErr), _, _):
-            return .failure(.validation(modeErr))
-        case let (_, .failure(providerErr), _):
-            return .failure(.validation(providerErr))
-        case let (_, _, .failure(qualityErr)):
-            return .failure(.validation(qualityErr))
-        }
+        // case let .failure(providerErr):
+        // return .failure(.validation(providerErr))
+        // }
     }
 }

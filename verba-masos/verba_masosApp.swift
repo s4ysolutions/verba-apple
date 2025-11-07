@@ -1,9 +1,7 @@
-import SwiftUI
 import core
-
+import SwiftUI
 @main
 struct verba_masosApp: App {
-
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
@@ -18,22 +16,30 @@ struct verba_masosApp: App {
 
     @available(macOS 13.0, *)
     private var modernScene: some Scene {
-        WindowGroup("Verba") {
-            ContentView(translateUseCase: translationService)
+        Settings {
+            // WindowGroup("Verba") {
+            ContentView(translateUseCase: translationService, getProvidersUseCase: translationService)
         }
         .defaultSize(width: 800, height: 600)
         .windowResizability(.contentSize)
         .windowToolbarStyle(.automatic)
         .commands {
+            CommandGroup(replacing: .appSettings) {
+                // Empty - removes Settings menu item
+            }
         }
     }
 
     @available(macOS, introduced: 11.0, obsoleted: 13.0)
     private var legacyScene: some Scene {
-        WindowGroup("Verba") {
-            ContentView(translateUseCase: translationService)
+        Settings {
+            // WindowGroup("Verba") {
+            //ContentView(translateUseCase: translationService, getProvidersUseCase: translationService)
         }
         .commands {
+            CommandGroup(replacing: .appSettings) {
+                // Empty - removes Settings menu item
+            }
         }
     }
 
@@ -45,5 +51,5 @@ struct verba_masosApp: App {
         }
     }
 
-    private let translationService = TranslationService(repository: TranslationRestRepository())
+    private let translationService = TranslationService(translationRepository: TranslationRestRepository())
 }

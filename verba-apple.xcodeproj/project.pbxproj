@@ -43,7 +43,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		41A35C1E2EB7D94E009B2ED9 /* verba-masos.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "verba-masos.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		417A1F142EBF2F6E00BF9D1C /* verba-apple.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = "verba-apple.xcodeproj"; sourceTree = SOURCE_ROOT; };
+		41A35C1E2EB7D94E009B2ED9 /* Verba.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Verba.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		41A35C2B2EB7D94F009B2ED9 /* verba-masosTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "verba-masosTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		41A35C352EB7D94F009B2ED9 /* verba-masosUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "verba-masosUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		41A35C4A2EB7D97C009B2ED9 /* verba-ios.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "verba-ios.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -148,6 +149,7 @@
 		41A35C132EB7D92C009B2ED9 = {
 			isa = PBXGroup;
 			children = (
+				417A1F142EBF2F6E00BF9D1C /* verba-apple.xcodeproj */,
 				41A35C202EB7D94E009B2ED9 /* verba-masos */,
 				41A35C2E2EB7D94F009B2ED9 /* verba-masosTests */,
 				41A35C382EB7D94F009B2ED9 /* verba-masosUITests */,
@@ -163,7 +165,7 @@
 		41A35C1F2EB7D94E009B2ED9 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				41A35C1E2EB7D94E009B2ED9 /* verba-masos.app */,
+				41A35C1E2EB7D94E009B2ED9 /* Verba.app */,
 				41A35C2B2EB7D94F009B2ED9 /* verba-masosTests.xctest */,
 				41A35C352EB7D94F009B2ED9 /* verba-masosUITests.xctest */,
 				41A35C4A2EB7D97C009B2ED9 /* verba-ios.app */,
@@ -203,7 +205,7 @@
 				41A9B0012EB802EA0055EACB /* core */,
 			);
 			productName = "verba-masos";
-			productReference = 41A35C1E2EB7D94E009B2ED9 /* verba-masos.app */;
+			productReference = 41A35C1E2EB7D94E009B2ED9 /* Verba.app */;
 			productType = "com.apple.product-type.application";
 		};
 		41A35C2A2EB7D94F009B2ED9 /* verba-masosTests */ = {
@@ -501,6 +503,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				DEVELOPMENT_TEAM = UG4RLDWC8L;
+				PRODUCT_NAME = "";
 			};
 			name = Debug;
 		};
@@ -508,6 +511,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				DEVELOPMENT_TEAM = UG4RLDWC8L;
+				PRODUCT_NAME = "";
 			};
 			name = Release;
 		};
@@ -548,7 +552,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				COPY_PHASE_STRIP = NO;
@@ -603,7 +607,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				OTHER_SWIFT_FLAGS = "";
 				PRODUCT_BUNDLE_IDENTIFIER = "s4y.solutions.verba-masos";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = Verba;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = macosx;
@@ -655,7 +659,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				COPY_PHASE_STRIP = NO;
@@ -703,7 +707,7 @@
 				MTL_FAST_MATH = YES;
 				OTHER_SWIFT_FLAGS = "";
 				PRODUCT_BUNDLE_IDENTIFIER = "s4y.solutions.verba-masos";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = Verba;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = macosx;
