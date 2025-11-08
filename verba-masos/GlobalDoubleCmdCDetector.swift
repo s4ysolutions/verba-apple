@@ -20,7 +20,7 @@ class GlobalDoubleCmdCDetector {
             startPermissionPolling()
             return false
         }
-        startPermissionPolling()
+        startEventTap()
 
         return true
     }

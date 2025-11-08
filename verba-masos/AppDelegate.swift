@@ -12,7 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var translationService: TranslationService<TranslationRestRepository>?
 
     private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "verba-masos", category: "AppDelegate")
-    private var detector: GlobalDoubleCmdCDetector?
+    private var doubleCmdCDetector: GlobalDoubleCmdCDetector?
     private let selectionCapture = SelectionCapture()
 
     private var statusBarController: StatusBarController?
@@ -31,7 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             }
         )
 
-        detector = GlobalDoubleCmdCDetector {
+        doubleCmdCDetector = GlobalDoubleCmdCDetector {
             Self.logger.debug("Double Cmd+C detected!")
             self.selectionCapture.captureSelection { [weak self] text in
                 guard let self = self, let text = text else {
@@ -42,7 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             }
         }
 
-        let started = detector?.start() ?? false
+        let started = doubleCmdCDetector?.start() ?? false
         Self.logger.debug("Double Cmd+C detection \(started ? "started" : "not started")")
     }
 
