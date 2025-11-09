@@ -17,10 +17,7 @@ struct verba_masosApp: App {
     @available(macOS 13.0, *)
     private var modernScene: some Scene {
         Settings {
-            // WindowGroup("Verba") {
-            ContentView(translateUseCase: translationService, getProvidersUseCase: translationService)
         }
-        .defaultSize(width: 800, height: 600)
         .windowResizability(.contentSize)
         .windowToolbarStyle(.automatic)
         .commands {
@@ -33,9 +30,8 @@ struct verba_masosApp: App {
     @available(macOS, introduced: 11.0, obsoleted: 13.0)
     private var legacyScene: some Scene {
         Settings {
-            // WindowGroup("Verba") {
-            //ContentView(translateUseCase: translationService, getProvidersUseCase: translationService)
         }
+        .windowToolbarStyle(.automatic)
         .commands {
             CommandGroup(replacing: .appSettings) {
                 // Empty - removes Settings menu item

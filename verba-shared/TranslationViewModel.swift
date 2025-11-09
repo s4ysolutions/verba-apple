@@ -154,8 +154,10 @@ final class TranslationViewModel: ObservableObject {
                 lastUsedMode = mode
                 lastUsedQuality = quality
                 lastUsedProvider = provider
-                // Copy to clipboard on success
-                copyToClipboard(text)
+                if UserDefaults.standard.object(forKey: "menu.check.autoPaste") as? Bool ?? true {
+                    copyToClipboard(text)
+                    logger.debug("Pasted translation to clipboard")
+                }
             case let .failure(error):
                 errorMessage = "Failed: \(error.localizedDescription)"
             }

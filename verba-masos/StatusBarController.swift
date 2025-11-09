@@ -113,94 +113,24 @@ final class StatusBarController {
     }
 
     private func showMenu() {
-        /*
-         guard let button = statusItem.button else { return }
-         let workspace = NSWorkspace.shared
-         previousApp = workspace.runningApplications.first { app in
-             app.isActive //&& app.bundleIdentifier != Bundle.main.bundleIdentifier
-         }
-         // NSApp.activate(ignoringOtherApps: true)
-         let rect = button.bounds
-         menu.popUp(positioning: nil, at: NSPoint(x: rect.minX, y: rect.minY), in: button)
-          */
-        /*
-         if let frontmostApp = NSWorkspace.shared.frontmostApplication,
-            frontmostApp.bundleIdentifier != Bundle.main.bundleIdentifier {
-             frontmostApp.activate(options: [])
-         }
-          */
-        
         guard let button = statusItem.button else { return }
         statusItem.menu = menu
         button.performClick(nil)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             self.statusItem.menu = nil
         }
-
-        /*
-         guard let button = statusItem.button else {
-             Self.logger.error("showMenu: statusItem.button is nil; using fallback presentation")
-             if let anchorView = NSApp.keyWindow?.contentView ?? NSApp.mainWindow?.contentView ?? NSApp.windows.first?.contentView {
-                 if let currentEvent = NSApp.currentEvent {
-                     NSMenu.popUpContextMenu(menu, with: currentEvent, for: anchorView)
-                 } else {
-                     let mouseLocation = NSEvent.mouseLocation
-                     menu.popUp(positioning: nil, at: mouseLocation, in: nil)
-                 }
-             } else {
-                 let mouseLocation = NSEvent.mouseLocation
-                 menu.popUp(positioning: nil, at: mouseLocation, in: nil)
-             }
-             return
-         }
-
-         if let currentEvent = NSApp.currentEvent {
-             Self.logger.debug("showMenu: Using current event with popUpContextMenu")
-             // NSMenu.popUpContextMenu(menu, with: currentEvent, for: button)
-             let rect = button.bounds
-             menu.popUp(positioning: nil, at: NSPoint(x: rect.minX, y: rect.minY), in: button)
-         } else {
-             let screenFrame = button.window?.convertToScreen(button.convert(button.bounds, to: nil)) ?? .zero
-             let center = NSPoint(x: screenFrame.midX, y: screenFrame.minY) // below the button
-             let synthetic = NSEvent.mouseEvent(
-                 with: .rightMouseDown,
-                 location: center,
-                 modifierFlags: [],
-                 timestamp: ProcessInfo.processInfo.systemUptime,
-                 windowNumber: button.window?.windowNumber ?? 0,
-                 context: nil,
-                 eventNumber: 0,
-                 clickCount: 1,
-                 pressure: 1.0
-             )
-             Self.logger.debug("showMenu: Using synthetic event with popUpContextMenu")
-             NSMenu.popUpContextMenu(menu, with: synthetic!, for: button)
-         }
-         Self.logger.debug("dismiss")
-          */
-        /*
-         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-             NSApp.hide(nil)
-             NSApp.deactivate()
-             if let keyWindow = NSApp.keyWindow {
-                 keyWindow.resignKey()
-             }
-         }
-          */
     }
 
     @objc private func toggleAutoCopy(_ sender: NSMenuItem) {
         sender.state = (sender.state == .on) ? .off : .on
         let newValue = (sender.state == .on)
         UserDefaults.standard.set(newValue, forKey: Self.autoCopyKey)
-        Self.logger.info("AutoCopy set to \(newValue, privacy: .public)")
     }
 
     @objc private func toggleAutoPaste(_ sender: NSMenuItem) {
         sender.state = (sender.state == .on) ? .off : .on
         let newValue = (sender.state == .on)
         UserDefaults.standard.set(newValue, forKey: Self.autoPasteKey)
-        Self.logger.info("AutoPaste set to \(newValue, privacy: .public)")
     }
 
     @objc private func didTapShow() {
