@@ -1,3 +1,3 @@
 public protocol GetProvidersUseCase: Sendable {
-    func providers() async -> Result<[TranslationProvider], ApiError>
+    func providers() async -> Result<[TranslationProvider], TranslationError>
 }

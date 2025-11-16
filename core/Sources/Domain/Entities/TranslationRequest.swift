@@ -1,6 +1,8 @@
+import OSLog
+
 public struct TranslationRequest: Sendable {
     public let sourceText: String
-    public let sourceLang: String
+    public let sourceLang: String?
     public let targetLang: String
     public let mode: TranslationMode
     public let provider: TranslationProvider
@@ -9,7 +11,7 @@ public struct TranslationRequest: Sendable {
 
     private init(
         sourceText: String,
-        sourceLang: String,
+        sourceLang: String?,
         targetLang: String,
         mode: TranslationMode,
         provider: TranslationProvider,
@@ -37,20 +39,31 @@ public struct TranslationRequest: Sendable {
         // Validate sourceText
         let trimmedText = sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedText.isEmpty else {
+            logger.error("Empty source text")
             return .failure(.validation(.emptyString))
         }
 
-        guard sourceLang.count <= 16 else {
-            return .failure(.validation(.langTooLong(sourceLang)))
+        let trimmedSourceLang = sourceLang.trimmingCharacters(in: .whitespacesAndNewlines)
+
+
+        guard trimmedSourceLang.count == 0 || trimmedSourceLang.count <= 16 else {
+            logger.error("source lang too long: \(trimmedSourceLang)")
+            return .failure(.validation(.langTooLong(trimmedSourceLang)))
         }
-        guard sourceLang.count > 2 else {
-            return .failure(.validation(.langTooShort(sourceLang)))
+        guard trimmedSourceLang.count == 0 || trimmedSourceLang.count > 2 else {
+            logger.error("source lang too short: \(trimmedSourceLang)")
+            return .failure(.validation(.langTooShort(trimmedSourceLang)))
         }
-        guard targetLang.count <= 16 else {
-            return .failure(.validation(.langTooLong(targetLang)))
+
+        let trimmedTargetLang = targetLang.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard trimmedTargetLang.count <= 16 else {
+            logger.error("target lang too long: \(trimmedTargetLang)")
+            return .failure(.validation(.langTooLong(trimmedTargetLang)))
         }
-        guard targetLang.count > 2 else {
-            return .failure(.validation(.langTooShort(targetLang)))
+        guard trimmedTargetLang.count > 2 else {
+            logger.error("target lang too short: \(trimmedTargetLang)")
+            return .failure(.validation(.langTooShort(trimmedTargetLang)))
         }
 
         // let modeResult = mode //TranslationMode.from(string: mode)
@@ -62,9 +75,9 @@ public struct TranslationRequest: Sendable {
         // case let .success(provider):
         // All parsed: Create and succeed
         let request = TranslationRequest(
-            sourceText: sourceText,
-            sourceLang: sourceLang,
-            targetLang: targetLang,
+            sourceText: trimmedText,
+            sourceLang: trimmedSourceLang.count == 0 ? nil : trimmedSourceLang,
+            targetLang: trimmedTargetLang,
             mode: mode,
             provider: provider,
             quality: quality,
@@ -76,4 +89,6 @@ public struct TranslationRequest: Sendable {
         // return .failure(.validation(providerErr))
         // }
     }
+
+    private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "verba-masos", category: "TranslationRequest")
 }

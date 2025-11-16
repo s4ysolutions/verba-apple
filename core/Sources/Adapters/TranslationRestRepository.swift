@@ -4,13 +4,15 @@ import OSLog
 
 public struct TranslationRestRepository: TranslationRepository {
     private static let baseURL = "https://verba.s4y.solutions"
-    //private static let baseURL = "http://localhost:4000"
+    // private static let baseURL = "http://localhost:4000"
     private static let translationUrl = URL(string: "\(baseURL)/translation")!
     private static let providersUrl = URL(string: "\(baseURL)/providers")!
     private let secret: String
+    private let httpClient: HttpClient
 
-    public init() {
+    public init(httpClient: HttpClient = URLSession.shared) {
         secret = Bundle.main.object(forInfoDictionaryKey: "VERBA_SECRET") as! String
+        self.httpClient = httpClient
     }
 
     public func providers() async -> Result<[TranslationProvider], ApiError> {
@@ -21,38 +23,17 @@ public struct TranslationRestRepository: TranslationRepository {
         let wsseHeader = makeWsseHeader(username: username, secret: secret)
         request.setValue(wsseHeader, forHTTPHeaderField: "Authorization")
 
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse else {
-                return .failure(.unexpected("Non-HTTP response"))
-            }
-            switch http.statusCode {
-            case 200 ... 299:
-                break
-            case 401, 403:
-                return .failure(.invalidKey)
-            case 429:
-                return .failure(.rateLimitExceeded)
-            default:
-                let bodyPreview = String(data: data, encoding: .utf8) ?? "<non-utf8 body>"
-                let msg = "HTTP \(http.statusCode): \(bodyPreview)"
-                logger.error("\(msg)")
-                return .failure(.unexpected(msg))
-            }
+        return await executeRequest(request) { data in
             if let json = try? JSONSerialization.jsonObject(with: data, options: []) as? [String] {
-                let providers = json.map { TranslationProvider(id: $0, displayName: $0) }
+                let providers = json.map { TranslationProvider(id: $0, displayName: $0, qualities: []) }
                 return .success(providers)
             }
-            let msg = "Get providers expected JSON array in response, got: \(data)"
-            logger.error("\(msg)")
-            return .failure(.decodingFailed("\(msg)", NSError(domain: "Empty response", code: -1)))
-        } catch {
-            let msg = "Failed to fetch providers: \(error)"
-            return .failure(.networking(error))
+            logger.error("Get providers expected JSON array in response, got: \(data)")
+            return .failure(.decodingFailed(String(format: NSLocalizedString("error.api.decoding.not-array", comment: ""), "\(data)"), nil))
         }
     }
 
-    public func translate(from translationRequest: TranslationRequest) async -> Result<String, TranslationError> {
+    public func translate(from translationRequest: TranslationRequest) async -> Result<String, ApiError> {
         // Build request
         var request = URLRequest(url: Self.translationUrl)
         request.httpMethod = "POST"
@@ -96,30 +77,11 @@ public struct TranslationRestRepository: TranslationRepository {
             let data = try JSONSerialization.data(withJSONObject: bodyDict, options: [])
             request.httpBody = data
         } catch {
-            return .failure(.api(.encodingFailed("translation request body", error)))
+            return .failure(.encodingFailed(NSLocalizedString("error.api.encoding.json", comment: "Error while encoding translation requst as JSON"), error))
         }
-
-        // Execute request
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse else {
-                return .failure(.api(.unexpected("Non-HTTP response")))
-            }
-
-            switch http.statusCode {
-            case 200 ... 299:
-                break
-            case 401, 403:
-                return .failure(.api(.invalidKey))
-            case 429:
-                return .failure(.api(.rateLimitExceeded))
-            default:
-                let bodyPreview = String(data: data, encoding: .utf8) ?? "<non-utf8 body>"
-                return .failure(.api(.unexpected("HTTP \(http.statusCode): \(bodyPreview)")))
-            }
-
+        return await executeRequest(request) { data in
             if let json = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any],
-               let translated = json["text"] as? String {
+               let translated = json["translated"] as? String {
                 return .success(translated)
             }
 
@@ -132,11 +94,70 @@ public struct TranslationRestRepository: TranslationRepository {
             if let text = String(data: data, encoding: .utf8), !text.isEmpty {
                 return .success(text)
             } else {
-                return .failure(.api(.decodingFailed("translation response", NSError(domain: "Empty response", code: -1))))
+                logger.warning("Failed to decode translation response: empty response")
+                // TODO: improve error
+                return .failure(.decodingFailed(
+                    NSLocalizedString(
+                        "error.api.decoding.empty",
+                        comment: "Failed to decode translation response: empty response"),
+                    nil))
+            }
+        }
+    }
+
+    // MARK: - Common request execution
+
+    func executeRequest<T>(
+        _ request: URLRequest,
+        parser: @escaping (Data) -> Result<T, ApiError>
+    ) async -> Result<T, ApiError> {
+        do {
+            let (data, response) = try await httpClient.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                return .failure(.unexpected(
+                    NSLocalizedString(
+                        "error.api.http.non-http-response",
+                        comment: "HTTP responded with Non-HTTP response")))
+            }
+            switch http.statusCode {
+            case 200 ... 299:
+                break
+            case 401, 403:
+                logger.error("Authorization error")
+                return .failure(.invalidKey)
+            case 413:
+                logger.error("request too big")
+                return .failure(.requestTooBig)
+            case 429:
+                logger.error("Rate limit exceeded")
+                return .failure(.rateLimitExceeded)
+            default:
+                let bodyString: String = String(data: data, encoding: .utf8) ?? ""
+                logger.error("HTTP error: \(http.statusCode)\n \(bodyString)")
+                // check is body is html formatted by extracting <body> part and
+                // if it is use that part as error description, use the
+                // whole bodyString overwise
+                let errorMessage: String = {
+                    let lowercased = bodyString.lowercased()
+                    if let startRange = lowercased.range(of: "<body>"),
+                       let endRange = lowercased.range(of: "</body>", range: startRange.upperBound ..< lowercased.endIndex) {
+                        let bodyRange = startRange.upperBound ..< endRange.lowerBound
+                        // Map the range from the lowercased string back to the original string indices by offset
+                        let startOffset = lowercased.distance(from: lowercased.startIndex, to: bodyRange.lowerBound)
+                        let endOffset = lowercased.distance(from: lowercased.startIndex, to: bodyRange.upperBound)
+                        let start = bodyString.index(bodyString.startIndex, offsetBy: startOffset)
+                        let end = bodyString.index(bodyString.startIndex, offsetBy: endOffset)
+                        return String(bodyString[start ..< end])
+                    } else {
+                        return bodyString
+                    }
+                }()
+                return .failure(.http(http.statusCode, errorMessage))
             }
 
+            return parser(data)
         } catch {
-            return .failure(.api(.networking(error)))
+            return .failure(.networking(error))
         }
     }
 

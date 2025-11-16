@@ -25,34 +25,40 @@ struct ContentView: View {
     var body: some View {
         GeometryReader { geo in
             if viewModel.isLoading {
-                VStack {
-                    Spacer()
-                    ProgressView("Loading...")
-                        .frame(maxWidth: .infinity, alignment: .center)
-                    Spacer()
-                }
-                .background(Color(NSColor.textBackgroundColor))
-                .frame(height: geo.size.height)
+                LoadingApp(geo: geo)
+                    .background(Color(NSColor.textBackgroundColor))
             } else {
                 VStack {
                     VStack {
-                        editableText($viewModel.translatingText)
-                            .focused($focused)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        TranslatingText(text: $viewModel.translatingText,focused: $focused)
                         HStack {
                             Spacer()
-                            TextField(NSLocalizedString("lable.from", value: "From:", comment: "A language to translate from"),
-                                      text: $viewModel.fromLanguage)
-                                .frame(maxWidth: 150)
-                            Button(NSLocalizedString(
-                                "label.translate",
-                                value: "Translate",
-                                comment: "Send the content of the text field to the translation service"))
-                            {
-                                handleTranslate()
+                            if !viewModel.isTranslating {
+                                TextField(NSLocalizedString("lable.from", value: "From:", comment: "A language to translate from"),
+                                          text: $viewModel.fromLanguage)
+                                    .frame(maxWidth: 100)
                             }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(viewModel.isTranslating)
+                            if viewModel.isTranslating {
+                                Button(NSLocalizedString(
+                                    "label.cancel",
+                                    value: "Cancel",
+                                    comment: "Cancel the ongoing translation")) {
+                                        logger.debug("Cancelling translation")
+                                        viewModel.cancelTranslation()
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .tint(.red)
+                            } else {
+                                Button(NSLocalizedString(
+                                    "label.translate",
+                                    value: "Translate",
+                                    comment: "Send the content of the text field to the translation service"))
+                                {
+                                    logger.debug("Launching translation (force: true)")
+                                    viewModel.translate(text: viewModel.translatingText, force: true)
+                                }
+                                .buttonStyle(.borderedProminent)
+                            }
                         }.padding(.trailing)
                     }
                     .padding(.leading)
@@ -65,8 +71,16 @@ struct ContentView: View {
                             .frame(maxHeight: .infinity)
                     } else {
                         VStack {
-                            editableText($viewModel.translatedText)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Group { if let error = viewModel.errorMessage {
+                                Text(error)
+                                    .foregroundColor(.red)
+                                    .frame(maxWidth: .infinity, alignment: .center)
+                            } else {
+                                TranslatedText(text: $viewModel.translatedText)
+                                    //.frame(maxWidth: .infinity, alignment: .leading)
+                            }}
+                            .frame(maxHeight: .infinity)
+                            .layoutPriority(1)
                             HStack {
                                 HStack {
                                     Picker("", selection: $viewModel.mode) {
@@ -115,6 +129,7 @@ struct ContentView: View {
                     }
                 }
                 .background(Color(NSColor.textBackgroundColor))
+                .padding(.top)
             }
         }
         .onAppear {
@@ -128,126 +143,6 @@ struct ContentView: View {
             focused = true
         }
     }
-
-    /*
-     var body: some View {
-         let vm = viewModel
-
-         GeometryReader { geo in
-             if viewModel.isLoading {
-                 VStack {
-                     Spacer()
-                     ProgressView("Loading...")
-                         .frame(maxWidth: .infinity, alignment: .center)
-                     Spacer()
-                 }
-                 .background(Color(NSColor.textBackgroundColor))
-                 .frame(height: geo.size.height)
-             } else {
-                 VStack {
-                     VStack {
-                         editableText($viewModel.translatingText)
-                             .focused($focused)
-                             .frame(maxWidth: .infinity, alignment: .leading)
-                         HStack {
-                             Spacer()
-                             TextField(NSLocalizedString("lable.from", value: "From:", comment: "A language to translate from"),
-                                       text: $viewModel.fromLanguage)
-                                 .frame(maxWidth: 150)
-                             Button(NSLocalizedString(
-                                 "label.translate",
-                                 value: "Translate",
-                                 comment: "Send the content of the text field to the translation service"))
-                             {
-                                 handleTranslate()
-                             }
-                             .buttonStyle(.borderedProminent)
-                             .disabled(viewModel.isTranslating)
-                         }.padding(.trailing)
-                     }
-                     .padding(.leading)
-                     // .background(Color(NSColor.textBackgroundColor))
-                     .background(Color.red)
-                     .frame(height: geo.size.height * (2.0 / 9.0)) // 2 -
-
-                     Divider()
-
-                     // Middle panel
-                     if vm.isTranslating {
-                         ProgressView("Translating...")
-                             .background(Color(NSColor.textBackgroundColor))
-                             .frame(height: geo.size.height * (7.0 / 9.0))
-                     } else {
-                         VStack {
-                             editableText($viewModel.translatedText)
-                                 .frame(maxWidth: .infinity, alignment: .leading)
-                             HStack {
-                                 HStack {
-                                     Picker("", selection: $viewModel.mode) {
-                                         Text(modeLabel(.Auto)).tag(TranslationMode.Auto)
-                                         Text(modeLabel(.TranslateSentence)).tag(TranslationMode.TranslateSentence)
-                                         Text(modeLabel(.ExplainWords)).tag(TranslationMode.ExplainWords)
-                                     }
-                                     .pickerStyle(.menu)
-                                     .frame(maxWidth: 180)
-
-                                     // Quality selector
-                                     Picker("", selection: $viewModel.quality) {
-                                         Text(qualityLabel(.Fast)).tag(TranslationQuality.Fast)
-                                         Text(qualityLabel(.Optimal)).tag(TranslationQuality.Optimal)
-                                         Text(qualityLabel(.Thinking)).tag(TranslationQuality.Thinking)
-                                     }
-                                     .pickerStyle(.menu)
-                                     .frame(maxWidth: 180)
-
-                                     Picker("", selection: $viewModel.provider) {
-                                         ForEach(viewModel.providers) { provider in
-                                             Text(provider.displayName).tag(Optional(provider))
-                                         }
-                                     }
-                                     .pickerStyle(.menu)
-                                     .frame(maxWidth: 180)
-                                 }
-                                 .background(Color.yellow)
-                                 .fixedSize(horizontal: true, vertical: false)
-
-                                 Spacer()
-
-                                 HStack {
-                                     TextField(NSLocalizedString("label.to", value: "To:", comment: "A language to translate to"),
-                                               text: $viewModel.toLanguage)
-                                         .frame(maxWidth: 150)
-                                     Button(NSLocalizedString(
-                                         "label.copy",
-                                         value: "Copy",
-                                         comment: "Copy the translated text to the clipboard"), systemImage: "doc.on.doc") {
-                                             handleCopy()
-                                         }
-                                 }
-                                 .background(Color.yellow)
-                                 .fixedSize(horizontal: true, vertical: false)
-                             }
-                         }
-                         // .background(Color(NSColor.textBackgroundColor))
-                         .background(Color.green)
-                         .frame(height: geo.size.height * (7.0 / 9.0))
-                         .padding(.leading)
-                     }
-                 }
-             }
-         }
-         .onAppear {
-             logger.debug("View: onAppear")
-             updateClipboardText()
-             focused = true
-         }
-         .onReceive(appBecameActivePublisher) { _ in
-             logger.debug("View: onRecieve")
-             updateClipboardText()
-             focused = true
-         }
-     }
-      */
 
     // MARK: - Platform helpers
 
@@ -288,12 +183,14 @@ struct ContentView: View {
             .font(.system(.body, design: .default))
     }
 
+    /*
     @ViewBuilder
     private func editableText(_ text: Binding<String>) -> some View {
         TextEditor(text: text)
             .textSelection(.enabled)
             .font(.system(.body, design: .default))
     }
+     */
 
     // Provide user-facing labels for modes
     private func modeLabel(_ mode: TranslationMode) -> String {
@@ -333,13 +230,6 @@ struct ContentView: View {
         #if os(macOS)
             NSApp.keyWindow?.performClose(nil)
         #endif
-    }
-
-    private func handleTranslate() {
-        logger.debug("Launching translation (force: true)")
-        Task {
-            await viewModel.translate(text: viewModel.translatingText, force: true)
-        }
     }
 
     private func handleCopy() {

@@ -9,14 +9,16 @@ final class TranslationViewModel: ObservableObject {
     @Published var translatedText: String = ""
     @Published var isTranslating: Bool = false
     @Published var errorMessage: String?
-    @Published var fromLanguage: String = "english"
-    @Published var toLanguage: String = "russian"
+    @Published var fromLanguage: String = ""
+    @Published var toLanguage: String = Locale.current.localizedString(forLanguageCode: Locale.current.languageCode ?? "") ?? ""
     @Published var mode: TranslationMode = .Auto
     @Published var quality: TranslationQuality = .Optimal
     @Published var provider: TranslationProvider? = nil
     @Published var providers: [TranslationProvider] = []
     @Published var isLoading = true
     @Published var loadingError: String? = nil
+
+    private var currentTranslationTask: Task<Void, Never>?
 
     private var lastTranslatedText: String = "" // non-edited translated text
     private var lastUsedMode: TranslationMode?
@@ -41,7 +43,7 @@ final class TranslationViewModel: ObservableObject {
         let userDefaults = UserDefaults.standard
 
         // Load persisted languages if available
-        if let savedFrom = userDefaults.string(forKey: Self.fromLanguageKey), !savedFrom.isEmpty {
+        if let savedFrom = userDefaults.string(forKey: Self.fromLanguageKey) {
             fromLanguage = savedFrom
         }
         if let savedTo = userDefaults.string(forKey: Self.toLanguageKey), !savedTo.isEmpty {
@@ -101,8 +103,12 @@ final class TranslationViewModel: ObservableObject {
         }
     }
 
-    func translate(text: String, force: Bool) async {
+    func translate(text: String, force: Bool) {
         logger.debug("translation requested")
+        if toLanguage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            logger.debug("No need to translate, no target language")
+            return
+        }
         if text == translatedText || text == lastTranslatedText {
             logger.debug("No need to translate, its result of translation")
             return
@@ -121,8 +127,21 @@ final class TranslationViewModel: ObservableObject {
             return
         }
 
-        translatingText = text
+        cancelTranslation()
 
+        translatingText = text
+        currentTranslationTask = Task {
+            await performTranslation()
+        }
+    }
+
+    func cancelTranslation() {
+        currentTranslationTask?.cancel()
+        currentTranslationTask = nil
+        isTranslating = false
+    }
+
+    private func performTranslation() async {
         await updateProviders()
 
         guard let translateProvider = provider else {
@@ -132,12 +151,13 @@ final class TranslationViewModel: ObservableObject {
         }
 
         isTranslating = true
+        logger.debug("View model clear error")
         errorMessage = nil
 
         let ipa = UserDefaults.standard.bool(forKey: requestIpaKey)
 
         let requestParsed = TranslationRequest.create(
-            sourceText: text,
+            sourceText: translatingText,
             sourceLang: fromLanguage,
             targetLang: toLanguage,
             mode: mode,
@@ -149,7 +169,20 @@ final class TranslationViewModel: ObservableObject {
         switch requestParsed {
         case let .success(request):
             logger.debug("Translating: \(request.sourceText)")
+
+            guard !Task.isCancelled else {
+                logger.debug("Translation cancelled before network call")
+                isTranslating = false
+                return
+            }
+
             let result = await translateUseCase.translate(from: request)
+
+            guard !Task.isCancelled else {
+                logger.debug("Translation cancelled after network call")
+                isTranslating = false
+                return
+            }
 
             switch result {
             case let .success(text):
@@ -163,12 +196,13 @@ final class TranslationViewModel: ObservableObject {
                     logger.debug("Pasted translation to clipboard")
                 }
             case let .failure(error):
-                errorMessage = "Failed: \(error.localizedDescription)"
+                logger.debug("View model set error: \(error.localizedDescription)")
+                errorMessage = error.localizedDescription
             }
 
         case let .failure(error):
-            logger.debug("Tranlating failed: \(error.localizedDescription)")
-            errorMessage = "Invalid: \(error.localizedDescription)"
+            logger.debug("View model set error: \(error.localizedDescription)")
+            errorMessage = error.localizedDescription
         }
 
         isTranslating = false
@@ -197,7 +231,7 @@ final class TranslationViewModel: ObservableObject {
         case let .success(providers):
             logger.debug("got providers success \(providers.count)")
             self.providers = providers
-                if let savedProviderId = UserDefaults.standard.string(forKey: Self.providerKey) {
+            if let savedProviderId = UserDefaults.standard.string(forKey: Self.providerKey) {
                 if let found = providers.first(where: { $0.id == savedProviderId }) {
                     provider = found
                 }
@@ -207,7 +241,7 @@ final class TranslationViewModel: ObservableObject {
             }
         case let .failure(error):
             // TODO: word
-            logger.warning("got providers error: \(error)")
+            logger.debug("View model set error: \(error.localizedDescription)")
             errorMessage = "Failed to load providers: \(error)"
         }
     }

@@ -34,43 +34,42 @@ struct ContentView: View {
     var body: some View {
         GeometryReader { geo in
             if viewModel.isLoading {
-                VStack(spacing: 0) {
-                    Spacer()
-                    ProgressView("Loading...")
-                        .frame(maxWidth: .infinity, alignment: .center)
-                    Spacer()
-                }
-                .frame(height: geo.size.height)
+                LoadingApp(geo: geo)
+                    .background(Color(UIColor.systemBackground))
             } else {
                 VStack {
                     VStack {
-                        editableText($viewModel.translatingText)
-                            .focused($focused)
-                            .padding([.leading])
-                            .onAppear {
-                                logger.debug("View: onAppear")
-                                updateClipboardText()
-                                focused = true
-                            }
-                            .onReceive(appBecameActivePublisher) { _ in
-                                logger.debug("View: onRecieve")
-                                updateClipboardText()
-                                focused = true
-                            }
+                        TranslatingText(text: $viewModel.translatingText,focused: $focused)
+                            // .focused($focused)
+                            //.frame(maxWidth: .infinity, alignment: .leading)
                         HStack {
                             Spacer()
-                            TextField(NSLocalizedString("lable.from", value: "From:", comment: "A language to translate from"),
-                                      text: $viewModel.fromLanguage)
-                                .frame(maxWidth: 100)
-                            Button(NSLocalizedString(
-                                "label.translate",
-                                value: "Translate",
-                                comment: "Send the content of the text field to the translation service"))
-                            {
-                                handleTranslate()
+                            if !viewModel.isTranslating {
+                                TextField(NSLocalizedString("lable.from", value: "From:", comment: "A language to translate from"),
+                                          text: $viewModel.fromLanguage)
+                                    .frame(maxWidth: 100)
                             }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(viewModel.isTranslating)
+                            if viewModel.isTranslating {
+                                Button(NSLocalizedString(
+                                    "label.cancel",
+                                    value: "Cancel",
+                                    comment: "Cancel the ongoing translation")) {
+                                        logger.debug("Cancelling translation")
+                                        viewModel.cancelTranslation()
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .tint(.red)
+                            } else {
+                                Button(NSLocalizedString(
+                                    "label.translate",
+                                    value: "Translate",
+                                    comment: "Send the content of the text field to the translation service"))
+                                {
+                                    logger.debug("Launching translation (force: true)")
+                                    viewModel.translate(text: viewModel.translatingText, force: true)
+                                }
+                                .buttonStyle(.borderedProminent)
+                            }
                         }
                         .padding(.trailing)
                     }
@@ -83,9 +82,22 @@ struct ContentView: View {
                             .frame(height: geo.size.height * (6.0 / 9.0))
                     } else {
                         VStack {
-                            editableText($viewModel.translatedText)
-                                // .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding([.leading, .bottom])
+                            Group { if let error = viewModel.errorMessage {
+                                Text(error)
+                                    .foregroundColor(.red)
+                                    .frame(maxWidth: .infinity, alignment: .center)
+                            } else {
+                                TranslatedText(text: $viewModel.translatedText)
+                                //editableText($viewModel.translatedText)
+                                 //   .frame(maxWidth: .infinity, alignment: .leading)
+                            }}
+                            .frame(maxHeight: .infinity)
+                            .layoutPriority(1)
+                            /*
+                             editableText($viewModel.translatedText)
+                                 // .frame(maxWidth: .infinity, alignment: .leading)
+                                 .padding([.leading, .bottom])
+                              */
                             if geo.size.width <= 600 {
                                 hstackTranslated()
                                 hstackSettings(true)
@@ -102,6 +114,16 @@ struct ContentView: View {
             }
         }
         .background(Color(UIColor.systemBackground))
+        .onAppear {
+            logger.debug("View: onAppear")
+            updateClipboardText()
+            focused = true
+        }
+        .onReceive(appBecameActivePublisher) { _ in
+            logger.debug("View: onRecieve")
+            updateClipboardText()
+            focused = true
+        }
     }
 
     // MARK: - Platform helpers
@@ -185,12 +207,14 @@ struct ContentView: View {
         }
     }
 
+    /*
     @ViewBuilder
     private func editableText(_ text: Binding<String>) -> some View {
         TextEditor(text: text)
             .textSelection(.enabled)
             .font(.body)
     }
+     */
 
     // Provide user-facing labels for modes
     private func modeLabel(_ mode: TranslationMode) -> String {
@@ -230,13 +254,6 @@ struct ContentView: View {
         #if os(macOS)
             NSApp.keyWindow?.performClose(nil)
         #endif
-    }
-
-    private func handleTranslate() {
-        logger.debug("Launching translation (force: true)")
-        Task {
-            await viewModel.translate(text: viewModel.translatingText, force: true)
-        }
     }
 
     private func handleCopy() {

@@ -16,13 +16,10 @@ public actor TranslationService<TR: TranslationRepository>:
     public func translate(from translationRequest: TranslationRequest) async -> Result<String, TranslationError> {
         logger.debug("request: \(translationRequest.sourceText)")
         let response = await translationRespository.translate(from: translationRequest)
-        if case let .failure(error) = response {
-            logger.error("translation failed: \(error.localizedDescription)")
-        }
-        return response
+        return response.mapError{.api($0)}
     }
 
-    public func providers() async -> Result<[TranslationProvider], ApiError> {
+    public func providers() async -> Result<[TranslationProvider], TranslationError> {
         if let providers = cachedProviders {
             logger.debug("Use cached providers")
             return .success(providers)
@@ -30,7 +27,7 @@ public actor TranslationService<TR: TranslationRepository>:
 
         if let existingTask = fetchTask {
             logger.debug("Waiting for previous providers request to complete")
-            return await existingTask.value
+            return await existingTask.value.mapError{.api($0)}
         }
 
         let task = Task<Result<[TranslationProvider], ApiError>, Never> {
@@ -45,6 +42,6 @@ public actor TranslationService<TR: TranslationRepository>:
 
         fetchTask = task
 
-        return await task.value
+        return await task.value.mapError{.api($0)}
     }
 }

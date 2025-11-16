@@ -1,4 +1,4 @@
-public enum TranslationQuality: String, CaseIterable, Identifiable, Sendable {
+public enum TranslationQuality: String, CaseIterable, Identifiable, Sendable, Codable {
     case Fast
     case Optimal
     case Thinking
